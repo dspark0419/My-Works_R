@@ -1,0 +1,197 @@
+---
+title: Rmarkdown, geom_functions
+author: by Daeshik Park
+output: html_document
+#output: flexdashboard::flex_dashboard
+# new page, ## new column, ### new row in flexdashboard
+---
+
+<br>
+
+```{css, echo=FALSE}
+pre {max-height: 200px; overflow-y: auto;
+  max-width: 900px; overflow-x: auto;} # global setting for output blocks
+```
+
+```{r global setting, include = FALSE}
+library(tidyverse) # dplyr, ggplot, etc
+library(kableExtra) # build common complex tables and manipulate table styles
+library(gridExtra) # multiple ggplots in a single grid
+library(reshape2) # melt a dataframe by setting the id to the date field to plot multiple time series 
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(fig.height = 4.5, fig.width = 6.5, dpi = 100, fig.align = "center")
+# displaying figures
+options(width = 100)
+```
+
+[## Column 1]
+
+#### **Structure and Table of Data**
+
+```{r structure of mpg}
+data("mpg")
+#str(mpg)
+#summary(mpg)
+```
+
+```{r table of the data, results='asis'}
+kable(mpg[1:5, ]) %>% kable_styling(full_width = F)
+```
+
+The five number summary of the variable hwy in the data mpg is (`r fivenum(mpg$hwy, na.rm=TRUE)`).
+
+<br>
+
+#### **Scatter Plots with labs and themes**
+
+```{r scatterplot with labs and themes}
+ggplot(data = mpg, mapping = aes(x = displ, y = hwy)) +
+  geom_point(aes(color = as.factor(cyl)), size = 1, show.legend = FALSE) + 
+# colors to the third variable cyl
+  geom_smooth(aes(color = as.factor(cyl)), method = "lm", se = FALSE) + 
+# method default = poly, lm = linear model, linear models according to cyl
+  labs(x = "Displacement",
+       y = "Highway Mileage",
+       color = "Cylinders",
+       title = "Displacement vs Highway Mileage",
+       subtitle = "1999 ~ 2008",
+       caption = "Source: http://fuelecomy.gov") +
+  theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(size = 8, hjust = 0.5),
+        axis.text.x = element_text(size = 7),
+        axis.text.y = element_text(size = 7),
+        axis.title.x = element_text(size = 10),
+        axis.title.y = element_text(size = 10),
+        legend.justification = c(1,0), 
+        legend.position = c(1,0.65), # none, top, right, bottom, left, c(a,b)
+        legend.title = element_text(size = 7),
+        legend.key.height = unit(0.5, "cm"),
+        legend.key.width = unit(0.3, "cm"),
+        plot.background = element_rect("green"), 
+        plot.margin = unit(c(0.5,1,0.5,1), "cm")) + 
+# c(0.5,1,0.5,1) top, right, bottom, left
+  scale_color_discrete(name = "Cylinders") # same as color in labs
+# see barplots for x-axis labels
+```
+
+```{r how to deal with overlapping points}
+g1 <- ggplot(data = mpg, mapping = aes(x = cty, y = hwy))
+g1 + geom_point() # Points are overlapped
+g1 + geom_jitter(width = 0, height = 0) # same as geom_point
+g1 + geom_jitter() # show all points
+g1 + geom_point(position = "jitter") # similar to geom_jitter
+g1 + geom_count() # increase the size of the points when they are overlapped
+```
+
+<br>
+
+#### **Facets for Scatter Plots**
+
+```{r facet into rows or cloumns}
+g2 <- ggplot(data = mpg, aes(displ, hwy)) + geom_point()
+g2 + facet_grid(class ~ .) # class in rows
+g2 + facet_grid( ~ class) # class in columns
+g2 + facet_grid(drv ~ class) # compare the vars drv and class over the same x, y coordinates
+g2 + facet_wrap( ~ class, nrow = 4) 
+g2 + facet_wrap( ~ class, ncol = 4, scales = "free")
+g2 + facet_wrap(drv ~ class, nrow = 3)
+```
+
+<br>
+
+#### **Pie Charts**
+
+```{r pie chart}
+drv_df <- data.frame(table(mpg$drv))
+colnames(drv_df) <- c("type_drv", "count")
+ggplot(drv_df, aes(x = "", y = count, fill = type_drv)) +
+  geom_bar(width = 1, size = 1, stat = "identity", color = "white") +
+  coord_polar(theta = "y", start = 0) +
+  geom_text(aes(x = 1, label = paste(round(count / sum(count) * 100, 1), "%")), 
+            position = position_stack(vjust = 0.5), size = 3) +
+  #scale_fill_manual(values = c("blue", "red", "yellow")) +
+  theme_void()  # remove background, grid, numeric labels
+
+round(table(mpg$drv)/length(mpg$drv) * 100, 1)
+pie(table(mpg$drv), col = c("salmon", "green", "sky blue"), radius = 1,
+    main = "Pie Chart of Drive Type",
+    labels = c("4WD_44.0%", "FWD_45.3%", "RWD_10.7%"))
+```
+
+[## Column 2]
+
+<br>
+
+#### **Histograms and Frequency Polygons**
+
+```{r histogram, results='asis'}
+g3 <- ggplot(data = mpg)
+plot1 <- g3 + geom_histogram(mapping = aes(displ), binwidth = 1, col = "black", fill = "blue")
+print(plot1)
+count <- count(mpg, cut_width(displ, 1)) # count each bar
+count <- rename(count, cut_width = "cut_width(displ, 1)", frequency = n)
+kable(count) %>% kable_styling(full_width = F) # displaying the table count
+g3 + geom_histogram(mapping = aes(displ, fill = class), binwidth = 1) # stacking histograms
+g3 + geom_freqpoly(mapping = aes(displ, color = class), binwidth = 1) # rather than the above, compare frequency polygons
+```
+
+<br>
+
+#### **Box Plots and Violin**
+
+```{r boxplot}
+g3 + geom_boxplot(mapping = aes(hwy))
+g5 <- ggplot(data = mpg, mapping = aes(x = hwy, y = class))
+ggplot(data = mpg) + 
+  geom_boxplot(mapping = aes(x = reorder(class, hwy, na.rm = TRUE), 
+                             y= hwy, fill = class)) + # reorder the boxes by means
+  coord_flip() + 
+  theme(legend.position = "none")
+g5 + geom_violin() + geom_jitter()
+```
+
+<br>
+
+#### **Bar Plots**
+
+```{r barplot}
+g4 <- ggplot(data = mpg, aes(x = class))
+plot2 <- g4 + geom_bar(aes(fill = class)) + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5), # x-axis labels
+        legend.position = "none")
+print(plot2)
+g4 + geom_bar(aes(fill = fl)) # stacked barplots
+g4 + geom_bar(aes(fill = fl), position = "dodge") # place overlapping objects directly beside one another
+```
+
+<br>
+
+#### **Multiple Plots in a Single Grid**
+
+```{r, multiple ggplots in a single grid}
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+<br>
+
+#### **Multiple Time Series**
+
+```{r, multiple time series by melting}
+data("economics")
+ggplot(economics) + geom_line(aes(x = date, y = pce, color = "pce")) +
+  geom_line(aes(x = date, y = unemploy, color = "unemploy")) +
+  scale_color_discrete(name = "Legend") # time series for the variables pce and unemploy
+
+df1 <- melt(economics[ , c("date", "pce", "unemploy")], id = "date")
+ggplot(df) + geom_line(aes(x = date, y = value, color = variable)) +
+  scale_color_discrete(name = "Legend") # time series for the variables pce and unemploy
+
+df2 <- melt(economics[ , c("date", "pce", "unemploy", "psavert")], id = "date")
+ggplot(dff) + geom_line(aes(x = date, y = value, color = variable)) +
+  facet_wrap(~ variable, scales = "free") +
+  theme(legend.position = "none") # facet for time series about multi-variables
+```
+
+<br>
+
+#### *The End*

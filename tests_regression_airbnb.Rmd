@@ -1,0 +1,183 @@
+---
+title: "Hypothesis Tests and Linear Regression"
+author: "Daeshik Park"
+output: html_document
+---
+
+```{css, echo=FALSE}
+pre {max-height: 300px; overflow-y: auto;
+  max-width: 900px; overflow-x: auto;} # global setting for output blocks
+#pre[class] {max-height: 50px;
+  #max-width: 100px;} # global setting for code blocks (not working)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.height = 4.5, fig.width = 6, dpi = 100, fig.align = "center")
+library(tidyverse)
+```
+
+<br>
+
+```{r, results='hide'}
+airbnb <- read_csv("AB_NYC_2019.csv")
+str(airbnb)
+```
+
+<br>
+
+### Hypothesis Test for a Proportion
+
+```{r 1-prop z-test}
+sum(is.na(airbnb$neighbourhood_group))
+table(airbnb$neighbourhood_group)/length(airbnb$neighbourhood_group)
+```
+
+Test at the 95% confidence level if the percentage of people staying in Brooklyn Airbnbs differs from 40%.
+
+```{r}
+x <- airbnb %>% filter(neighbourhood_group == "Brooklyn") %>% nrow()
+n <- nrow(airbnb)
+prop.test(x, n, p = 0.4, alternative = "two.sided", conf.level = 0.95)
+```
+
+<br>
+
+### Hypothesis Test for Difference of Proportions
+
+```{r}
+sum(is.na(airbnb$room_type))
+table(airbnb$room_type)/length(airbnb$room_type)
+```
+
+Test at the 95% confidence level if the proportion of entire homes/apartments available is more than the proportion of private rooms available.
+
+```{r 2-prop z-test}
+x1 <- airbnb %>% filter(room_type == "Entire home/apt") %>% nrow()
+x2 <- airbnb %>% filter(room_type == "Private room") %>% nrow()
+x <- c(x1, x2)
+n <- c(nrow(airbnb), nrow(airbnb))
+prop.test(x, n, alternative = "greater", conf.level = 0.95)
+```
+
+<br>
+
+### Hypothesis Test for a Mean
+
+```{r}
+summary(airbnb$price)
+```
+
+Test at the 95% confidence level if the mean price per night of an Airbnb in NYC is more than $150.
+
+```{r one sample t-test}
+t.test(airbnb$price, mu = 150, alternative = "greater", conf.level = 0.95)
+```
+
+<br>
+
+### Hypothesis Test for Difference of Means
+
+Test at the 95% confidence level if Staten Island has a higher average price per night than Queens.
+
+```{r two sample t-test}
+Staten <- airbnb %>% filter(neighbourhood_group == "Staten Island")
+Queens <- airbnb %>% filter(neighbourhood_group == "Queens")
+t.test(Staten$price, Queens$price, alternative = "greater", conf.level = 0.95)
+```
+
+<br>
+
+### Hypothesis Test for Equality of Means
+
+```{r}
+by_nbd_group <- group_by(airbnb, neighbourhood_group)
+summarise(by_nbd_group, mean(price))
+```
+
+Test at the 95% confidence level if the mean prices per night of the five boroughs in NYC are not equal.
+
+```{r ANOVA test}
+results <- aov(airbnb$price ~ airbnb$neighbourhood_group)
+summary(results)
+results
+```
+
+**Conclusion:** $p$-value $< \alpha$, so reject $H_0$. There is enough evidence to show that there is a relationship between borough and price. However, we do not know what that relationship is! We do not know which average prices are different!
+
+<br>
+
+### Hypothesis Test for Association of Categorical Variables
+
+```{r}
+freq_dist <- table(airbnb$neighbourhood_group, airbnb$room_type)
+round(prop.table(freq_dist) * 100, 0)
+```
+
+```{r}
+chisq.test(freq_dist)
+
+chi_result <- chisq.test(freq_dist)
+summary(chi_result)
+chi_result
+```
+
+**Conclusion:** $p$-value $< \alpha$, so reject $H_0$. There is enough evidence to show that borough and room type are associated.  
+There are ways to analyze what the relationship may be.
+
+```{r}
+chi_result$residuals
+```
+
+```{r}
+library(corrplot)
+corrplot(chi_result$residuals, is.corr = FALSE) # A graphical display of a correlation matrix, confidence interval. Also visualize a general matrix by setting is.corr = FALSE.
+```
+
+<br>
+
+### Linear Regression and Correlation
+
+```{r, scatter plot for numeric variables}
+data("mpg")
+mpg_num <- select_if(mpg, is.numeric)
+pairs(mpg_num, col = "blue")
+```
+
+Multi-plots of one variable over multi-variables
+
+```{r, fig.height = 4.5, fig.width = 8, dpi = 100, fig.align = "center"}
+mpg_num %>% gather(-cty, key = "var", value = "value") %>%
+  ggplot(aes(x = value, y = cty)) +
+  geom_point(color = "green") +
+  geom_jitter(color = "green") +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ var, scales = "free")
+```
+
+It looks like the variables cty and hwy are linearly related in a strong and a positive way. Let's investigate the linear regression model between cty and hwy.
+
+```{r, linear regression}
+linear_mod <- lm(hwy ~ cty, data = mpg)
+summary(linear_mod)
+```
+
+```{r, equation of the linear model}
+hwy_predicted <- function(cty) {
+  hwy_predicted <- linear_mod$coefficients[2] * cty + linear_mod$coefficients[1]
+  return(hwy_predicted) }
+hwy_predicted(25)
+```
+
+```{r}
+ggplot(data = mpg, mapping = aes(cty, linear_mod$residuals)) +
+  geom_count(col = "green") +
+  geom_abline(intercept = 0, slope = 0, col = "blue", linetype = "longdash", size = 1)
+```
+
+```{r, correlation}
+cor(mpg$cty, mpg$hwy)
+```
+<br>
+
+### *The End*
